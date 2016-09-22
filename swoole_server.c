@@ -15,7 +15,7 @@
  */
 
 #include "php_swoole.h"
-
+#include "module.h"
 #include "Connection.h"
 
 #include "ext/standard/php_var.h"
@@ -997,7 +997,6 @@ static void php_swoole_onShutdown(swServer *serv)
     zval *retval = NULL;
 
     args[0] = &zserv;
-    sw_zval_add_ref(&zserv);
 
 #if PHP_MAJOR_VERSION < 7
     TSRMLS_FETCH_FROM_CTX(sw_thread_ctx ? sw_thread_ctx : NULL);
@@ -1035,7 +1034,6 @@ static void php_swoole_onWorkerStart(swServer *serv, int worker_id)
     ZVAL_LONG(zworker_id, worker_id);
 
     args[0] = &zserv;
-    sw_zval_add_ref(&zserv);
     args[1] = &zworker_id;
 
     /**
@@ -1227,7 +1225,6 @@ void php_swoole_onConnect(swServer *serv, swDataHead *info)
     ZVAL_LONG(zfrom_id, info->from_id);
 
     args[0] = &zserv;
-    sw_zval_add_ref(&zserv);
     args[1] = &zfd;
     args[2] = &zfrom_id;
 
@@ -1273,7 +1270,6 @@ void php_swoole_onClose(swServer *serv, swDataHead *info)
     ZVAL_LONG(zfrom_id, info->from_id);
 
     args[0] = &zserv;
-    sw_zval_add_ref(&zserv);
     args[1] = &zfd;
     args[2] = &zfrom_id;
 
@@ -1490,12 +1486,18 @@ PHP_METHOD(swoole_server, set)
         convert_to_boolean(v);
         serv->enable_unsafe_event = Z_BVAL_P(v);
     }
-    //port reuse
-    if (php_swoole_array_get_value(vht, "enable_port_reuse", v))
+#ifdef HAVE_REUSEPORT
+    //reuse port
+    if (php_swoole_array_get_value(vht, "enable_reuse_port", v))
     {
         convert_to_boolean(v);
         SwooleG.reuse_port = Z_BVAL_P(v);
     }
+    else
+    {
+        SwooleG.reuse_port = 0;
+    }
+#endif
     //delay receive
     if (php_swoole_array_get_value(vht, "enable_delay_receive", v))
     {
@@ -1862,6 +1864,7 @@ PHP_METHOD(swoole_server, start)
     serv->onReceive = php_swoole_onReceive;
     serv->ptr2 = zobject;
 
+    sw_zval_add_ref(&zobject);
     php_swoole_server_before_start(serv, zobject TSRMLS_CC);
 
     ret = swServer_start(serv);
@@ -2251,7 +2254,7 @@ PHP_METHOD(swoole_server, stats)
     sw_add_assoc_long_ex(return_value, ZEND_STRS("request_count"), SwooleStats->request_count);
     sw_add_assoc_long_ex(return_value, ZEND_STRS("worker_request_count"), SwooleWG.request_count);
 
-    if (SwooleG.task_ipc_mode > SW_IPC_UNSOCK && SwooleGS->task_workers.queue)
+    if (SwooleG.task_ipc_mode > SW_TASK_IPC_UNIXSOCK && SwooleGS->task_workers.queue)
     {
         int queue_num = -1;
         int queue_bytes = -1;
@@ -2706,7 +2709,7 @@ PHP_METHOD(swoole_server, bind)
     SwooleGS->lock.lock(&SwooleGS->lock);
     if (conn->uid == 0)
     {
-        conn->uid = uid;
+        conn->uid = (uint32_t) uid;
         ret = 1;
     }
     SwooleGS->lock.unlock(&SwooleGS->lock);

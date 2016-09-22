@@ -293,7 +293,7 @@ static int swManager_loop_async(swFactory *factory)
 
                 ManagerProcess.reload_task_worker = 0;
                 goto kill_workers;
-            }            
+            }
         }
         if (SwooleG.running == 1)
         {
@@ -371,11 +371,11 @@ static int swManager_loop_async(swFactory *factory)
                 if (ret < 0)
                 {
                     swSysError("kill(%d, SIGTERM) failed.", reload_workers[i].pid);
-                }  
+                }
             }
             ManagerProcess.reloading = 0;
         }
-    } 
+    }
 
     sw_free(reload_workers);
 
@@ -439,7 +439,7 @@ static int swManager_loop_async(swFactory *factory)
         serv->onManagerStop(serv);
     }
 
-    return SW_OK;   
+    return SW_OK;
 }
 
 static int swManager_loop_sync(swFactory *factory)

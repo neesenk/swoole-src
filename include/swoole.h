@@ -216,6 +216,7 @@ enum swEvent_type
     SW_EVENT_READ = 1u << 9,
     SW_EVENT_WRITE = 1u << 10,
     SW_EVENT_ERROR = 1u << 11,
+    SW_EVENT_ONCE = 1u << 12,
 };
 //-------------------------------------------------------------------------------
 enum swServer_mode
@@ -519,7 +520,7 @@ typedef struct _swConnection
     /**
      * bind uid
      */
-    long uid;
+    uint32_t uid;
 
     /**
      * memory buffer size;
@@ -527,9 +528,14 @@ typedef struct _swConnection
     int buffer_size;
 
     /**
-     *  upgarde websocket
+     * upgarde websocket
      */
     uint8_t websocket_status;
+
+    /**
+     * unfinished data frame
+     */
+    swString *websocket_buffer;
 
 #ifdef SW_USE_OPENSSL
     SSL *ssl;
@@ -1699,6 +1705,7 @@ typedef struct
 
     uint32_t session_round :24;
     uint8_t start;  //after swServer_start will set start=1
+    uint16_t logfile_version;
 
     time_t now;
 
@@ -1736,8 +1743,8 @@ typedef struct
     uint32_t shutdown :1;
     uint32_t reload;
     uint32_t reload_count;   //reload计数
-
     uint32_t request_count;
+    uint16_t logfile_version;
 
     int max_request;
 
