@@ -90,20 +90,8 @@ int swPort_enable_ssl_encrypt(swListenPort *ls)
 int swPort_listen(swListenPort *ls)
 {
     int sock = ls->sock;
-
-    //reuse address
     int option = 1;
-    //reuse port
-#ifdef HAVE_REUSEPORT
-    if (SwooleG.reuse_port)
-    {
-        if (setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(int)) < 0)
-        {
-            swSysError("setsockopt(SO_REUSEPORT) failed.");
-            SwooleG.reuse_port = 0;
-        }
-    }
-#endif
+
     //listen stream socket
     if (listen(sock, ls->backlog) < 0)
     {
@@ -528,8 +516,20 @@ void swPort_free(swListenPort *port)
     if (port->ssl)
     {
         swSSL_free_context(port->ssl_context);
-        free(port->ssl_cert_file);
-        free(port->ssl_key_file);
+        sw_strdup_free(port->ssl_cert_file);
+        sw_strdup_free(port->ssl_key_file);
+        if (port->ssl_client_cert_file)
+        {
+            sw_strdup_free(port->ssl_client_cert_file);
+        }
+        if (port->ssl_config.ciphers)
+        {
+            sw_strdup_free(port->ssl_config.ciphers);
+        }
+        if (port->ssl_config.ecdh_curve)
+        {
+            sw_strdup_free(port->ssl_config.ecdh_curve);
+        }
     }
 #endif
 
