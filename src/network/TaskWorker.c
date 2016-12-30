@@ -31,19 +31,9 @@ void swTaskWorker_init(swProcessPool *pool)
     pool->start_id = SwooleG.serv->worker_num;
     pool->run_worker_num = SwooleG.task_worker_num;
 
-    char *tmp_dir = swoole_dirname(SwooleG.task_tmpdir);
-    //create tmp dir
-    if (access(tmp_dir, R_OK) < 0 && swoole_mkdir_recursive(tmp_dir) < 0)
-    {
-        swWarn("create task tmp dir failed.");
-    }
     if (SwooleG.task_ipc_mode == SW_TASK_IPC_PREEMPTIVE)
     {
         pool->dispatch_mode = SW_DISPATCH_QUEUE;
-    }
-    if (tmp_dir)
-    {
-        sw_strdup_free(tmp_dir);
     }
 }
 
@@ -121,6 +111,9 @@ static void swTaskWorker_signal_init(void)
     swSignal_set(SIGUSR2, NULL, 1, 0);
     swSignal_set(SIGTERM, swWorker_signal_handler, 1, 0);
     swSignal_set(SIGALRM, swSystemTimer_signal_handler, 1, 0);
+#ifdef SIGRTMIN
+    swSignal_set(SIGRTMIN, swWorker_signal_handler, 1, 0);
+#endif
 }
 
 void swTaskWorker_onStart(swProcessPool *pool, int worker_id)
@@ -131,6 +124,8 @@ void swTaskWorker_onStart(swProcessPool *pool, int worker_id)
 
     SwooleG.use_timer_pipe = 0;
     SwooleG.use_timerfd = 0;
+
+    swServer_close_port(serv, SW_TRUE);
 
     swTaskWorker_signal_init();
     swWorker_onStart(serv);
@@ -209,12 +204,7 @@ int swTaskWorker_finish(swServer *serv, char *data, int data_len, int flags)
             sw_atomic_t *finish_count = (sw_atomic_t*) result->data;
             char *_tmpfile = result->data + 4;
             int fd = open(_tmpfile, O_APPEND | O_WRONLY);
-            if (fd < 0)
-            {
-                swSysError("open(%s) failed.", _tmpfile);
-                (*finish_count) ++;
-            }
-            else
+            if (fd >= 0)
             {
                 buf.info.type = SW_EVENT_FINISH;
                 buf.info.fd = current_task->info.fd;
@@ -222,7 +212,7 @@ int swTaskWorker_finish(swServer *serv, char *data, int data_len, int flags)
                 //result pack
                 if (data_len >= SW_IPC_MAX_SIZE - sizeof(buf.info))
                 {
-                    if (swTaskWorker_large_pack(result, data, data_len) < 0)
+                    if (swTaskWorker_large_pack(&buf, data, data_len) < 0)
                     {
                         swWarn("large task pack failed()");
                         buf.info.len = 0;
@@ -233,12 +223,13 @@ int swTaskWorker_finish(swServer *serv, char *data, int data_len, int flags)
                     buf.info.len = data_len;
                     memcpy(buf.data, data, data_len);
                 }
-                sw_atomic_fetch_add(finish_count, 1);
                 //write to tmpfile
-                if (write(fd, &buf, sizeof(buf.info) + buf.info.len) < 0)
+                if (swoole_sync_writefile(fd, &buf, sizeof(buf.info) + buf.info.len) < 0)
                 {
                     swSysError("write(%s, %ld) failed.", result->data, sizeof(buf.info) + buf.info.len);
                 }
+                sw_atomic_fetch_add(finish_count, 1);
+                close(fd);
             }
         }
         else
@@ -271,9 +262,9 @@ int swTaskWorker_finish(swServer *serv, char *data, int data_len, int flags)
         {
             ret = task_notify_pipe->write(task_notify_pipe, &flag, sizeof(flag));
 #ifdef HAVE_KQUEUE
-            if (errno == EAGAIN || errno == ENOBUFS)
+            if (ret < 0 && errno == EAGAIN || errno == ENOBUFS)
 #else
-            if (errno == EAGAIN)
+            if (ret < 0 && errno == EAGAIN)
 #endif
             {
                 if (swSocket_wait(task_notify_pipe->getFd(task_notify_pipe, 1), -1, SW_EVENT_WRITE) == 0)

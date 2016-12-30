@@ -1,16 +1,18 @@
 Swoole
 ======
 [![Build Status](https://api.travis-ci.org/swoole/swoole-src.svg)](https://travis-ci.org/swoole/swoole-src)
+[![License](https://img.shields.io/badge/license-apache2-blue.svg)](LICENSE)
+[![Join the chat at https://gitter.im/swoole/swoole-src](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/swoole/swoole-src?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 Swoole is an event-driven asynchronous & concurrent networking communication framework with high performance written only in C for PHP.
 
 __Document__: <https://rawgit.com/tchiotludo/swoole-ide-helper/english/docs/index.html>
 
-__IDE Helper__: <https://github.com/tchiotludo/swoole-ide-helper>
+__IDE Helper__: <https://github.com/swoole/ide-helper>
 
 __中文文档__: <http://wiki.swoole.com/>
 
-__IRC__:  <http://webchat.freenode.net/?channels=swoole&uio=d4>
+__IRC__:  <https://gitter.im/swoole/swoole-src>
 
 
 event-based
@@ -80,7 +82,7 @@ With Swoole server, you can build web servers, chat messaging servers, game serv
 
 The following example shows a simple echo server.
 
-~~~php
+```php
 // create a server instance
 $serv = new swoole_server("127.0.0.1", 9501); 
 
@@ -101,7 +103,7 @@ $serv->on('close', function ($serv, $fd) {
 
 // start our server, listen on port and ready to accept connections
 $serv->start();
-~~~
+```
 
 Try to extend your server and implement what you want!
 
@@ -403,11 +405,10 @@ bool swoole_client::close();
 
 Refer [API Reference](http://wiki.swoole.com/wiki/page/3.html) for more detail information of these functions.
 
-
 ## API Reference
 
 * [中文](http://wiki.swoole.com/) 
-* [English](https://cdn.rawgit.com/tchiotludo/swoole-ide-helper/dd73ce0dd949870daebbf3e8fee64361858422a1/docs/index.html)
+* [English](https://rawgit.com/tchiotludo/swoole-ide-helper/english/docs/index.html)
 
 ## Related Projects
 

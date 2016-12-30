@@ -22,11 +22,15 @@ enum swErrorCode
     /**
      * common error
      */
-    SW_ERROR_MALLOC_FAIL = 101,
+    SW_ERROR_MALLOC_FAIL = 501,
     SW_ERROR_SYSTEM_CALL_FAIL,
     SW_ERROR_PHP_FATAL_ERROR,
     SW_ERROR_NAME_TOO_LONG,
-    SW_ERROR_FILE_NOT_EXIST,
+    SW_ERROR_INVALID_PARAMS,
+
+    SW_ERROR_FILE_NOT_EXIST = 700,
+    SW_ERROR_FILE_TOO_LARGE,
+    SW_ERROR_FILE_EMPTY,
 
     /**
      * connection error
@@ -43,6 +47,9 @@ enum swErrorCode
     SW_ERROR_SSL_CANNOT_USE_SENFILE,
     SW_ERROR_SSL_EMPTY_PEER_CERTIFICATE,
     SW_ERROR_SSL_VEFIRY_FAILED,
+
+    SW_ERROR_PACKAGE_LENGTH_TOO_LARGE = 1201,
+
     /**
      * task error
      */

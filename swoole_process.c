@@ -27,6 +27,7 @@ static PHP_METHOD(swoole_process, pop);
 static PHP_METHOD(swoole_process, push);
 static PHP_METHOD(swoole_process, kill);
 static PHP_METHOD(swoole_process, signal);
+static PHP_METHOD(swoole_process, alarm);
 static PHP_METHOD(swoole_process, wait);
 static PHP_METHOD(swoole_process, daemon);
 #ifdef HAVE_CPU_AFFINITY
@@ -46,29 +47,104 @@ static zval *signal_callback[SW_SIGNO_MAX];
 static zend_class_entry swoole_process_ce;
 zend_class_entry *swoole_process_class_entry_ptr;
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_construct, 0, 0, 1)
+    ZEND_ARG_INFO(0, callback)
+    ZEND_ARG_INFO(0, redirect_stdin_and_stdout)
+    ZEND_ARG_INFO(0, pipe_type)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_void, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_wait, 0, 0, 0)
+    ZEND_ARG_INFO(0, blocking)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_signal, 0, 0, 2)
+    ZEND_ARG_INFO(0, signal_no)
+    ZEND_ARG_INFO(0, callback)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_alarm, 0, 0, 1)
+    ZEND_ARG_INFO(0, usec)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_kill, 0, 0, 1)
+    ZEND_ARG_INFO(0, pid)
+    ZEND_ARG_INFO(0, signal_no)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_daemon, 0, 0, 0)
+    ZEND_ARG_INFO(0, nochdir)
+    ZEND_ARG_INFO(0, noclose)
+ZEND_END_ARG_INFO()
+
+#ifdef HAVE_CPU_AFFINITY
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_setaffinity, 0, 0, 1)
+    ZEND_ARG_ARRAY_INFO(0, cpu_settings, 0)
+ZEND_END_ARG_INFO()
+#endif
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_useQueue, 0, 0, 1)
+    ZEND_ARG_INFO(0, key)
+    ZEND_ARG_INFO(0, mode)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_write, 0, 0, 1)
+    ZEND_ARG_INFO(0, data)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_read, 0, 0, 0)
+    ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_push, 0, 0, 1)
+    ZEND_ARG_INFO(0, data)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_pop, 0, 0, 0)
+    ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_exit, 0, 0, 0)
+    ZEND_ARG_INFO(0, exit_code)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_exec, 0, 0, 2)
+    ZEND_ARG_INFO(0, exec_file)
+    ZEND_ARG_INFO(0, args)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_process_name, 0, 0, 1)
+    ZEND_ARG_INFO(0, process_name)
+ZEND_END_ARG_INFO()
+
+#define MSGQUEUE_NOWAIT    (1 << 8)
+
 static const zend_function_entry swoole_process_methods[] =
 {
-    PHP_ME(swoole_process, __construct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(swoole_process, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
-    PHP_ME(swoole_process, wait, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_ME(swoole_process, signal, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_ME(swoole_process, kill, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_ME(swoole_process, daemon, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, __construct, arginfo_swoole_process_construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(swoole_process, __destruct, arginfo_swoole_process_void, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
+    PHP_ME(swoole_process, wait, arginfo_swoole_process_wait, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, signal, arginfo_swoole_process_signal, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, alarm, arginfo_swoole_process_alarm, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, kill, arginfo_swoole_process_kill, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, daemon, arginfo_swoole_process_daemon, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
 #ifdef HAVE_CPU_AFFINITY
-    PHP_ME(swoole_process, setaffinity, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(swoole_process, setaffinity, arginfo_swoole_process_setaffinity, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
 #endif
-    PHP_ME(swoole_process, useQueue, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, statQueue, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, freeQueue, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, start, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, write, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, close, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, read, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, push, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, pop, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, exit, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_process, exec, NULL, ZEND_ACC_PUBLIC)
-    PHP_FALIAS(name, swoole_set_process_name, NULL)
+    PHP_ME(swoole_process, useQueue, arginfo_swoole_process_useQueue, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, statQueue, arginfo_swoole_process_void, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, freeQueue, arginfo_swoole_process_void, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, start, arginfo_swoole_process_void, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, write, arginfo_swoole_process_write, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, close, arginfo_swoole_process_void, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, read, arginfo_swoole_process_read, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, push, arginfo_swoole_process_push, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, pop, arginfo_swoole_process_pop, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, exit, arginfo_swoole_process_exit, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_process, exec, arginfo_swoole_process_exec, ZEND_ACC_PUBLIC)
+    PHP_FALIAS(name, swoole_set_process_name, arginfo_swoole_process_name)
     PHP_FE_END
 };
 
@@ -77,6 +153,7 @@ void swoole_process_init(int module_number TSRMLS_DC)
     SWOOLE_INIT_CLASS_ENTRY(swoole_process_ce, "swoole_process", "Swoole\\Process", swoole_process_methods);
     swoole_process_class_entry_ptr = zend_register_internal_class(&swoole_process_ce TSRMLS_CC);
     SWOOLE_CLASS_ALIAS(swoole_process, "Swoole\\Process");
+    zend_declare_class_constant_long(swoole_process_class_entry_ptr, SW_STRL("IPC_NOWAIT")-1, MSGQUEUE_NOWAIT TSRMLS_CC);
     /**
      * 31 signal constants
      */
@@ -133,6 +210,12 @@ static PHP_METHOD(swoole_process, __construct)
     if (!SWOOLE_G(cli))
     {
         swoole_php_fatal_error(E_ERROR, "swoole_process must run at php_cli environment.");
+        RETURN_FALSE;
+    }
+
+    if (SwooleG.serv && SwooleGS->start == 1 && swIsMaster())
+    {
+        swoole_php_fatal_error(E_ERROR, "cannot use process in master process.");
         RETURN_FALSE;
     }
 
@@ -250,17 +333,18 @@ static PHP_METHOD(swoole_process, useQueue)
 
     if (msgkey <= 0)
     {
-#if PHP_MAJOR_VERSION >= 7
-        msgkey = ftok(zend_get_executed_filename(), 0);
-#else
-        msgkey = ftok(zend_get_executed_filename(TSRMLS_C), 0);
-#endif
+        msgkey = ftok(sw_zend_get_executed_filename(), 1);
     }
 
     swMsgQueue *queue = emalloc(sizeof(swMsgQueue));
     if (swMsgQueue_create(queue, 1, msgkey, 0) < 0)
     {
         RETURN_FALSE;
+    }
+    if (mode & MSGQUEUE_NOWAIT)
+    {
+        swMsgQueue_set_blocking(queue, 0);
+        mode = mode & (~MSGQUEUE_NOWAIT);
     }
     queue->remove = 0;
     process->queue = queue;
@@ -348,7 +432,7 @@ static PHP_METHOD(swoole_process, signal)
         RETURN_FALSE;
     }
 
-    if (SwooleGS->start)
+    if (SwooleGS->start && (swIsWorker() || swIsMaster() || swIsManager() || swIsTaskWorker()))
     {
         if (signo == SIGTERM || signo == SIGALRM)
         {
@@ -408,6 +492,65 @@ static PHP_METHOD(swoole_process, signal)
      */
     SwooleG.main_reactor->check_signalfd = 1;
     swSignal_add(signo, php_swoole_onSignal);
+
+    RETURN_TRUE;
+}
+
+static PHP_METHOD(swoole_process, alarm)
+{
+    long usec = 0;
+    long type = ITIMER_REAL;
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l|l", &usec, &type) == FAILURE)
+    {
+        return;
+    }
+
+    if (!SWOOLE_G(cli))
+    {
+        swoole_php_fatal_error(E_ERROR, "cannot use swoole_process::alarm here.");
+        RETURN_FALSE;
+    }
+
+    if (SwooleG.timer.fd != 0)
+    {
+        swoole_php_fatal_error(E_WARNING, "cannot use both timer and alarm at the same time.");
+        RETURN_FALSE;
+    }
+
+    struct timeval now;
+    if (gettimeofday(&now, NULL) < 0)
+    {
+        swoole_php_error(E_WARNING, "gettimeofday() failed. Error: %s[%d]", strerror(errno), errno);
+        RETURN_FALSE;
+    }
+
+    struct itimerval timer_set;
+    bzero(&timer_set, sizeof(timer_set));
+
+    if (usec > 0)
+    {
+        long _sec = usec / 1000000;
+        long _usec = usec - (_sec * 1000000);
+
+        timer_set.it_interval.tv_sec = _sec;
+        timer_set.it_interval.tv_usec = _usec;
+
+        timer_set.it_value.tv_sec = _sec;
+        timer_set.it_value.tv_usec = _usec;
+
+        if (timer_set.it_value.tv_usec > 1e6)
+        {
+            timer_set.it_value.tv_usec = timer_set.it_value.tv_usec - 1e6;
+            timer_set.it_value.tv_sec += 1;
+        }
+    }
+
+    if (setitimer(type, &timer_set, NULL) < 0)
+    {
+        swoole_php_error(E_WARNING, "setitimer() failed. Error: %s[%d]", strerror(errno), errno);
+        RETURN_FALSE;
+    }
 
     RETURN_TRUE;
 }
@@ -652,7 +795,7 @@ static PHP_METHOD(swoole_process, push)
     struct
     {
         long type;
-        char data[65536];
+        char data[SW_MSGMAX];
     } message;
 
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &data, &length) == FAILURE)
@@ -698,10 +841,12 @@ static PHP_METHOD(swoole_process, pop)
     {
         RETURN_FALSE;
     }
-    if (maxsize <= 0 || maxsize > SW_MSGMAX)
+
+    if (maxsize > SW_MSGMAX || maxsize <= 0)
     {
         maxsize = SW_MSGMAX;
     }
+
     swWorker *process = swoole_get_object(getThis());
     if (!process->queue)
     {
@@ -727,7 +872,6 @@ static PHP_METHOD(swoole_process, pop)
     int n = swMsgQueue_pop(process->queue, (swQueue_data *) &message, maxsize);
     if (n < 0)
     {
-        swoole_php_fatal_error(E_WARNING, "msgrcv() failed. Error: %s[%d]", strerror(errno), errno);
         RETURN_FALSE;
     }
     SW_RETURN_STRINGL(message.data, n, 1);
@@ -778,8 +922,8 @@ static PHP_METHOD(swoole_process, exec)
 
 static PHP_METHOD(swoole_process, daemon)
 {
-    zend_bool nochdir = 0;
-    zend_bool noclose = 0;
+    zend_bool nochdir = 1;
+    zend_bool noclose = 1;
 
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|bb", &nochdir, &noclose) == FAILURE)
     {

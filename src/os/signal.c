@@ -22,8 +22,6 @@ static void swSignalfd_set(int signo, swSignalHander callback);
 static void swSignalfd_clear();
 static int swSignalfd_onSignal(swReactor *reactor, swEvent *event);
 
-#define SW_SIGNAL_INIT_NUM    8
-
 static sigset_t signalfd_mask;
 static int signal_fd = 0;
 #endif
@@ -36,6 +34,7 @@ typedef struct
 } swSignal;
 
 static swSignal signals[SW_SIGNO_MAX];
+static int _lock = 0;
 
 static void swSignal_async_handler(int signo);
 
@@ -58,10 +57,17 @@ void swSignal_none(void)
  */
 swSignalHander swSignal_set(int sig, swSignalHander func, int restart, int mask)
 {
+    //ignore
     if (func == NULL)
     {
-        func =  SIG_IGN;
+        func = SIG_IGN;
     }
+    //clear
+    else if ((long) func == -1)
+    {
+        func = SIG_DFL;
+    }
+
     struct sigaction act, oact;
     act.sa_handler = func;
     if (mask)
@@ -105,7 +111,14 @@ static void swSignal_async_handler(int signo)
     }
     else
     {
+        //discard signal
+        if (_lock)
+        {
+            return;
+        }
+        _lock = 1;
         swSignal_callback(signo);
+        _lock = 0;
     }
 }
 
@@ -132,7 +145,18 @@ void swSignal_clear(void)
     {
         swSignalfd_clear();
     }
+    else
 #endif
+    {
+        int i;
+        for (i = 0; i < SW_SIGNO_MAX; i++)
+        {
+            if (signals[i].active)
+            {
+                swSignal_set(signals[i].signo, (swSignalHander) -1, 1, 0);
+            }
+        }
+    }
     bzero(&signals, sizeof(signals));
 }
 

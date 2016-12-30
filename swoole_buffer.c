@@ -26,17 +26,48 @@ static PHP_METHOD(swoole_buffer, write);
 static PHP_METHOD(swoole_buffer, expand);
 static PHP_METHOD(swoole_buffer, clear);
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_construct, 0, 0, 0)
+    ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_void, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_expand, 0, 0, 1)
+    ZEND_ARG_INFO(0, size)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_substr, 0, 0, 1)
+    ZEND_ARG_INFO(0, offset)
+    ZEND_ARG_INFO(0, length)
+    ZEND_ARG_INFO(0, seek)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_write, 0, 0, 2)
+    ZEND_ARG_INFO(0, offset)
+    ZEND_ARG_INFO(0, data)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_read, 0, 0, 2)
+    ZEND_ARG_INFO(0, offset)
+    ZEND_ARG_INFO(0, length)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_buffer_append, 0, 0, 1)
+    ZEND_ARG_INFO(0, data)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry swoole_buffer_methods[] =
 {
-    PHP_ME(swoole_buffer, __construct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(swoole_buffer, __destruct, NULL, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
-    PHP_ME(swoole_buffer, __toString, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, substr, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, write, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, read, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, append, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, expand, NULL, ZEND_ACC_PUBLIC)
-    PHP_ME(swoole_buffer, clear, NULL, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, __construct, arginfo_swoole_buffer_construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(swoole_buffer, __destruct, arginfo_swoole_buffer_void, ZEND_ACC_PUBLIC | ZEND_ACC_DTOR)
+    PHP_ME(swoole_buffer, __toString, arginfo_swoole_buffer_void, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, substr, arginfo_swoole_buffer_substr, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, write, arginfo_swoole_buffer_write, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, read, arginfo_swoole_buffer_read, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, append, arginfo_swoole_buffer_append, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, expand, arginfo_swoole_buffer_expand, ZEND_ACC_PUBLIC)
+    PHP_ME(swoole_buffer, clear, arginfo_swoole_buffer_void, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -61,19 +92,19 @@ static PHP_METHOD(swoole_buffer, __construct)
 
     if (size < 1)
     {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, "buffer size cannot be less than 0");
+        zend_throw_exception(swoole_exception_class_entry_ptr, "buffer size cannot be less than 0.", SW_ERROR_INVALID_PARAMS TSRMLS_CC);
         RETURN_FALSE;
     }
     else if (size > SW_STRING_BUFFER_MAXLEN)
     {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, "buffer size must not exceed %d", SW_STRING_BUFFER_MAXLEN);
+        zend_throw_exception_ex(swoole_exception_class_entry_ptr, errno TSRMLS_CC, "buffer size must not exceed %d", SW_STRING_BUFFER_MAXLEN);
         RETURN_FALSE;
     }
 
     swString *buffer = swString_new(size);
     if (buffer == NULL)
     {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, "malloc(%ld) failed.", size);
+        zend_throw_exception_ex(swoole_exception_class_entry_ptr, errno TSRMLS_CC, "malloc(%ld) failed.", size);
         RETURN_FALSE;
     }
 

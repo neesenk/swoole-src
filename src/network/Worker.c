@@ -58,6 +58,9 @@ void swWorker_signal_init(void)
     swSignal_add(SIGALRM, swSystemTimer_signal_handler);
     //for test
     swSignal_add(SIGVTALRM, swWorker_signal_handler);
+#ifdef SIGRTMIN
+    swSignal_set(SIGRTMIN, swWorker_signal_handler, 1, 0);
+#endif
 }
 
 void swWorker_signal_handler(int signo)
@@ -113,10 +116,17 @@ void swWorker_signal_handler(int signo)
         {
             SwooleG.running = 0;
         }
-        break;    
+        break;
+
     case SIGUSR2:
         break;
     default:
+#ifdef SIGRTMIN
+        if (signo == SIGRTMIN)
+        {
+            swServer_reopen_log_file(SwooleG.serv);
+        }
+#endif
         break;
     }
 }
@@ -244,8 +254,8 @@ int swWorker_onTask(swFactory *factory, swEventData *task)
 
     case SW_EVENT_CLOSE:
 #ifdef SW_USE_OPENSSL
-        conn = swServer_connection_verify(serv, task->info.fd);
-        if (conn && conn->ssl_client_cert.length)
+        conn = swServer_connection_verify_no_ssl(serv, task->info.fd);
+        if (conn && conn->ssl_client_cert.length > 0)
         {
             free(conn->ssl_client_cert.str);
             bzero(&conn->ssl_client_cert, sizeof(conn->ssl_client_cert.str));
@@ -259,7 +269,7 @@ int swWorker_onTask(swFactory *factory, swEventData *task)
         //SSL client certificate
         if (task->info.len > 0)
         {
-            conn = swServer_connection_verify(serv, task->info.fd);
+            conn = swServer_connection_verify_no_ssl(serv, task->info.fd);
             conn->ssl_client_cert.str = strndup(task->data, task->info.len);
             conn->ssl_client_cert.size = conn->ssl_client_cert.length = task->info.len;
         }
@@ -267,6 +277,20 @@ int swWorker_onTask(swFactory *factory, swEventData *task)
         if (serv->onConnect)
         {
             serv->onConnect(serv, &task->info);
+        }
+        break;
+
+    case SW_EVENT_BUFFER_FULL:
+        if (serv->onBufferFull)
+        {
+            serv->onBufferFull(serv, &task->info);
+        }
+        break;
+
+    case SW_EVENT_BUFFER_EMPTY:
+        if (serv->onBufferFull)
+        {
+            serv->onBufferEmpty(serv, &task->info);
         }
         break;
 
@@ -442,8 +466,6 @@ int swWorker_loop(swFactory *factory, int worker_id)
     SwooleWG.request_count = 0;
     SwooleG.pid = getpid();
 
-    //signal init
-    swWorker_signal_init();
     swWorker *worker = swServer_get_worker(serv, worker_id);
     swServer_worker_init(serv, worker);
 
@@ -460,9 +482,9 @@ int swWorker_loop(swFactory *factory, int worker_id)
         return SW_ERR;
     }
     
-    serv->workers[worker_id].status = SW_WORKER_IDLE;
+    worker->status = SW_WORKER_IDLE;
 
-    int pipe_worker = serv->workers[worker_id].pipe_worker;
+    int pipe_worker = worker->pipe_worker;
 
     swSetNonBlock(pipe_worker);
     SwooleG.main_reactor->ptr = serv;
@@ -504,30 +526,19 @@ int swWorker_loop(swFactory *factory, int worker_id)
 /**
  * Send data to ReactorThread
  */
-int swWorker_send2reactor(swEventData *ev_data, size_t sendn, int fd)
+int swWorker_send2reactor(swEventData *ev_data, size_t sendn, int session_id)
 {
     int ret;
     swServer *serv = SwooleG.serv;
-
-    /**
-     * reactor_id: The fd in which the reactor.
-     */
-    int reactor_id = ev_data->info.from_id;
-    int pipe_index = fd % serv->reactor_pipe_num;
-
-    /**
-     * pipe_worker_id: The pipe in which worker.
-     */
-    int pipe_worker_id = reactor_id + (pipe_index * serv->reactor_num);
-    swWorker *worker = swServer_get_worker(serv, pipe_worker_id);
+    int _pipe_fd = swWorker_get_send_pipe(serv, session_id, ev_data->info.from_id);
 
     if (SwooleG.main_reactor)
     {
-        ret = SwooleG.main_reactor->write(SwooleG.main_reactor, worker->pipe_worker, ev_data, sendn);
+        ret = SwooleG.main_reactor->write(SwooleG.main_reactor, _pipe_fd, ev_data, sendn);
     }
     else
     {
-        ret = swSocket_write_blocking(worker->pipe_worker, ev_data, sendn);
+        ret = swSocket_write_blocking(_pipe_fd, ev_data, sendn);
     }
     return ret;
 }

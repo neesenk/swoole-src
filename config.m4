@@ -51,7 +51,7 @@ PHP_ARG_WITH(swoole, swoole support,
 [  --with-swoole           With swoole support])
 
 PHP_ARG_WITH(openssl_dir, for OpenSSL support,
-[  --with-openssl[=DIR]    Include OpenSSL support (requires OpenSSL >= 0.9.6)], no, no)
+[  --with-openssl-dir[=DIR]    Include OpenSSL support (requires OpenSSL >= 0.9.6)], no, no)
 
 AC_DEFUN([SWOOLE_HAVE_PHP_EXT], [
     extname=$1
@@ -259,7 +259,10 @@ if test "$PHP_SWOOLE" != "no"; then
         swoole_http_client.c \
         swoole_mysql.c \
         swoole_redis.c \
+        swoole_redis_server.c \
         swoole_module.c \
+        swoole_mmap.c \
+        swoole_channel.c \
         src/core/base.c \
         src/core/log.c \
         src/core/hashmap.c \
@@ -320,6 +323,7 @@ if test "$PHP_SWOOLE" != "no"; then
         src/protocol/Mqtt.c \
         src/protocol/Socks5.c \
         src/protocol/MimeTypes.c \
+        src/protocol/Redis.c \
         src/protocol/Base64.c"
 
     swoole_source_file="$swoole_source_file thirdparty/php_http_parser.c"

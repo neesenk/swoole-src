@@ -35,11 +35,11 @@
 		<email>shenzhe163@gmail.com</email>
 		<active>yes</active>
 	</developer>
-    <date>2016-09-09</date>
-    <time>16:48:51</time>
+    <date>2016-12-23</date>
+    <time>15:12:00</time>
     <version>
-		<release>1.8.11</release>
-		<api>1.8.11</api>
+		<release>1.9.3</release>
+		<api>1.9</api>
     </version>
     <stability>
         <release>stable</release>
@@ -47,10 +47,12 @@
     </stability>
     <license uri="http://www.apache.org/licenses/LICENSE-2.0.html">Apache2.0</license>
     <notes>
-- Added new package_length_type C(unsigned 8bit)/c(signed 8bit)
-- Added package_length_func option, you can use the C/C++ function to parse the packet length
-- Added SIGRTMIN signal handler, used to reopen the log file
-- Fixed server crash on Cygwin environment
+- Added extension function args info
+- Added package_length_func option
+- Added http_client download method
+- Fixed issue#965
+- Fixed issue#966
+- Fixed issue#967
     </notes>
 	<contents>
 		<dir name="/">
@@ -84,6 +86,7 @@
 				<file role="src" name="error.h" />
 				<file role="src" name="module.h" />
 				<file role="src" name="socks5.h" />
+				<file role="src" name="redis.h" />
 			</dir>
 			<file role="src" name="php_swoole.h" />
 			<file role="src" name="php7_wrapper.h" />
@@ -108,13 +111,27 @@
 			<file role="src" name="swoole_mysql.c" />
 			<file role="src" name="swoole_mysql.h" />
 			<file role="src" name="swoole_redis.c" />
+			<file role="src" name="swoole_redis_server.c" />
 			<file role="src" name="swoole_module.c" />
+			<file role="src" name="swoole_mmap.c" />
+			<file role="src" name="swoole_channel.c" />
 			<dir name="thirdparty">
 				<file role="src" name="php_http_parser.c" />
 				<file role="src" name="php_http_parser.h" />
 				<file role="src" name="multipart_parser.c" />
 				<file role="src" name="multipart_parser.h" />
 			</dir>
+            <dir name="benchmark">
+                <file role="src" name="async.php" />
+                <file role="src" name="run.php" />
+                <file role="src" name="tcp.php" />
+                <file role="src" name="udp.php" />
+                <file role="src" name="http.php" />
+                <file role="src" name="http.js" />
+                <file role="src" name="tcp.js" />
+                <file role="src" name="tcp.go" />
+                <file role="src" name="http.go" />
+            </dir>
 			<dir name="src">
 				<dir name="core">
 					<file role="src" name="base.c" />
@@ -196,6 +213,7 @@
 					<file role="src" name="Mqtt.c" />
 					<file role="src" name="Socks5.c" />
 					<file role="src" name="MimeTypes.c" />
+                    <file role="src" name="Redis.c" />
 				</dir>
 			</dir>
 			<dir name="examples">
@@ -271,16 +289,6 @@
                     <file role="src" name="tcp_client.php" />
                     <file role="src" name="udp_client.php" />
                 </dir>
-				<dir name="bench">
-					<file role="src" name="http.js" />
-					<file role="src" name="tcp.js" />
-					<file role="src" name="tcp.go" />
-					<file role="src" name="http.go" />
-					<file role="src" name="tcp.php" />
-					<file role="src" name="udp.php" />
-					<file role="src" name="http.php" />
-					<file role="src" name="run.php" />
-				</dir>
 				<dir name="timer">
                     <file role="src" name="after.php" />
                     <file role="src" name="tick.php" />
@@ -290,8 +298,14 @@
                 </dir>
                 <dir name="redis">
                     <file role="src" name="client.php" />
+                    <file role="src" name="server.php" />
+                    <file role="src" name="subscribe.php" />
+                </dir>
+                <dir name="mmap">
+                    <file role="src" name="mmap.php" />
                 </dir>
 				<file role="src" name="server.php" />
+                <file role="src" name="channel.php" />
 				<file role="src" name="mysql_proxy_server.php" />
 				<file role="src" name="proxy_sync.php" />
 				<file role="src" name="sendfile_server.php" />

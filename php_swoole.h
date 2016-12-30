@@ -33,6 +33,7 @@
 #include <ext/date/php_date.h>
 #include <ext/standard/url.h>
 #include <ext/standard/info.h>
+#include <ext/standard/php_array.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -43,7 +44,7 @@
 #include "Client.h"
 #include "async.h"
 
-#define PHP_SWOOLE_VERSION  "1.8.12-rc1"
+#define PHP_SWOOLE_VERSION  "1.9.4"
 #define PHP_SWOOLE_CHECK_CALLBACK
 
 /**
@@ -155,6 +156,8 @@ enum php_swoole_client_callback_type
     SW_CLIENT_CB_onReceive,
     SW_CLIENT_CB_onClose,
     SW_CLIENT_CB_onError,
+    SW_CLIENT_CB_onBufferFull,
+    SW_CLIENT_CB_onBufferEmpty,
 #ifdef SW_USE_OPENSSL
     SW_CLIENT_CB_onSSLReady,
 #endif
@@ -183,10 +186,13 @@ enum php_swoole_server_callback_type
     SW_SERVER_CB_onHandShake,      //worker(event)
     SW_SERVER_CB_onOpen,           //worker(event)
     SW_SERVER_CB_onMessage,        //worker(event)
+    //--------------------------Buffer Event----------------------------
+    SW_SERVER_CB_onBufferFull,     //worker(event)
+    SW_SERVER_CB_onBufferEmpty,    //worker(event)
     //-------------------------------END--------------------------------
 };
 
-#define PHP_SERVER_CALLBACK_NUM             (SW_SERVER_CB_onMessage+1)
+#define PHP_SERVER_CALLBACK_NUM             (SW_SERVER_CB_onBufferEmpty+1)
 
 typedef struct
 {
@@ -215,17 +221,14 @@ enum php_swoole_fd_type
 
 #define SW_LONG_CONNECTION_KEY_LEN          64
 
-extern zend_class_entry *swoole_lock_class_entry_ptr;
 extern zend_class_entry *swoole_process_class_entry_ptr;
 extern zend_class_entry *swoole_client_class_entry_ptr;
-extern zend_class_entry *swoole_http_client_class_entry_ptr;
 extern zend_class_entry *swoole_server_class_entry_ptr;
 extern zend_class_entry *swoole_connection_iterator_class_entry_ptr;
 extern zend_class_entry *swoole_buffer_class_entry_ptr;
-extern zend_class_entry *swoole_table_class_entry_ptr;
 extern zend_class_entry *swoole_http_server_class_entry_ptr;
-extern zend_class_entry *swoole_websocket_frame_class_entry_ptr;
 extern zend_class_entry *swoole_server_port_class_entry_ptr;
+extern zend_class_entry *swoole_exception_class_entry_ptr;
 
 extern zval *php_sw_server_callbacks[PHP_SERVER_CALLBACK_NUM];
 #if PHP_MAJOR_VERSION >= 7
@@ -285,6 +288,10 @@ PHP_METHOD(swoole_connection_iterator, next);
 PHP_METHOD(swoole_connection_iterator, current);
 PHP_METHOD(swoole_connection_iterator, key);
 PHP_METHOD(swoole_connection_iterator, valid);
+PHP_METHOD(swoole_connection_iterator, offsetExists);
+PHP_METHOD(swoole_connection_iterator, offsetGet);
+PHP_METHOD(swoole_connection_iterator, offsetSet);
+PHP_METHOD(swoole_connection_iterator, offsetUnset);
 #endif
 
 #ifdef SWOOLE_SOCKETS_SUPPORT
@@ -337,12 +344,15 @@ void swoole_http_client_init(int module_number TSRMLS_DC);
 #ifdef SW_USE_REDIS
 void swoole_redis_init(int module_number TSRMLS_DC);
 #endif
+void swoole_redis_server_init(int module_number TSRMLS_DC);
 void swoole_process_init(int module_number TSRMLS_DC);
 void swoole_http_server_init(int module_number TSRMLS_DC);
 void swoole_websocket_init(int module_number TSRMLS_DC);
 void swoole_buffer_init(int module_number TSRMLS_DC);
 void swoole_mysql_init(int module_number TSRMLS_DC);
 void swoole_module_init(int module_number TSRMLS_DC);
+void swoole_mmap_init(int module_number TSRMLS_DC);
+void swoole_channel_init(int module_number TSRMLS_DC);
 
 int php_swoole_process_start(swWorker *process, zval *object TSRMLS_DC);
 
@@ -356,6 +366,9 @@ swClient* php_swoole_client_new(zval *object, char *host, int host_len, int port
 void php_swoole_client_check_setting(swClient *cli, zval *zset TSRMLS_DC);
 zval* php_swoole_websocket_unpack(swString *data TSRMLS_DC);
 void php_swoole_sha1(const char *str, int _len, unsigned char *digest);
+
+int php_swoole_task_pack(swEventData *task, zval *data TSRMLS_DC);
+zval* php_swoole_task_unpack(swEventData *task_result TSRMLS_DC);
 
 static sw_inline void* swoole_get_object(zval *object)
 {
@@ -384,6 +397,7 @@ static sw_inline void* swoole_get_property(zval *object, int property_id)
 
 void swoole_set_object(zval *object, void *ptr);
 void swoole_set_property(zval *object, int property_id, void *ptr);
+int swoole_convert_to_fd(zval *zsocket TSRMLS_DC);
 
 #ifdef SWOOLE_SOCKETS_SUPPORT
 php_socket *swoole_convert_to_socket(int sock);
@@ -392,9 +406,12 @@ php_socket *swoole_convert_to_socket(int sock);
 void php_swoole_server_before_start(swServer *serv, zval *zobject TSRMLS_DC);
 void php_swoole_get_recv_data(zval *zdata, swEventData *req, char *header, uint32_t header_length);
 int php_swoole_get_send_data(zval *zdata, char **str TSRMLS_DC);
-void php_swoole_onConnect(swServer *serv, swDataHead *);
-int php_swoole_onReceive(swServer *serv, swEventData *req);
+void php_swoole_onConnect(swServer *, swDataHead *);
+int php_swoole_onReceive(swServer *, swEventData *);
 void php_swoole_onClose(swServer *, swDataHead *);
+void php_swoole_onBufferFull(swServer *, swDataHead *);
+void php_swoole_onBufferEmpty(swServer *, swDataHead *);
+int php_swoole_length_func(swProtocol *protocol, swConnection *conn, char *data, uint32_t length);
 
 static sw_inline zval* php_swoole_server_get_callback(swServer *serv, int server_fd, int event_type)
 {
@@ -416,6 +433,11 @@ static sw_inline zval* php_swoole_server_get_callback(swServer *serv, int server
 }
 
 #define php_swoole_array_get_value(ht, str, v)     (sw_zend_hash_find(ht, str, sizeof(str), (void **) &v) == SUCCESS && !ZVAL_IS_NULL(v))
+#define php_swoole_array_separate(arr)       zval *_new_##arr;\
+    SW_MAKE_STD_ZVAL(_new_##arr);\
+    array_init(_new_##arr);\
+    sw_php_array_merge(Z_ARRVAL_P(_new_##arr), Z_ARRVAL_P(arr));\
+    arr = _new_##arr;
 
 ZEND_BEGIN_MODULE_GLOBALS(swoole)
     long aio_thread_num;

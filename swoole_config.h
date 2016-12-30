@@ -31,6 +31,7 @@
 
 //#define SW_USE_MALLOC_TRIM
 #define SW_USE_EVENT_TIMER
+#define SW_USE_MONOTONIC_TIME
 //#define SW_USE_RINGBUFFER
 
 //#define SW_DEBUG_REMOTE_OPEN
@@ -76,6 +77,7 @@
 #endif
 //!!!End.-------------------------------------------------------------------
 
+#define SW_BUFFER_SIZE_STD         8192
 #define SW_BUFFER_SIZE_BIG         65536
 #define SW_BUFFER_SIZE_UDP         65536
 #define SW_SENDFILE_CHUNK_SIZE     65536
@@ -129,7 +131,7 @@
 #define SW_REACTOR_USE_SESSION
 #define SW_SESSION_LIST_SIZE             (1024*1024)
 
-#define SW_MSGMAX                        8192
+#define SW_MSGMAX                        65536
 
 /**
  * 最大Reactor线程数量，默认会启动CPU核数的线程数
@@ -230,7 +232,7 @@
 #define SW_HTTP_HEADER_KEY_SIZE          128
 #define SW_HTTP_HEADER_VALUE_SIZE        4096
 #define SW_HTTP_COMPRESS_GZIP
-#define SW_HTTP_UPLOAD_TMP_FILE          "/tmp/swoole.upfile.XXXXXX"
+#define SW_HTTP_UPLOAD_TMPDIR_SIZE       256
 #define SW_HTTP_DATE_FORMAT              "D, d M Y H:i:s T"
 //#define SW_HTTP_100_CONTINUE
 #define SW_HTTP2_DATA_BUFFSER_SIZE       8192

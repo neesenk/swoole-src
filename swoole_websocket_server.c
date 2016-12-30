@@ -29,13 +29,13 @@
 #include "base64.h"
 #include "thirdparty/php_http_parser.h"
 
-zend_class_entry swoole_websocket_server_ce;
-zend_class_entry *swoole_websocket_server_class_entry_ptr;
+static zend_class_entry swoole_websocket_server_ce;
+static zend_class_entry *swoole_websocket_server_class_entry_ptr;
 
-zend_class_entry swoole_websocket_frame_ce;
-zend_class_entry *swoole_websocket_frame_class_entry_ptr;
+static zend_class_entry swoole_websocket_frame_ce;
+static zend_class_entry *swoole_websocket_frame_class_entry_ptr;
 
-static int websocket_handshake(http_context *);
+static int websocket_handshake(swListenPort *, http_context *);
 
 static PHP_METHOD(swoole_websocket_server, on);
 static PHP_METHOD(swoole_websocket_server, push);
@@ -128,6 +128,7 @@ void swoole_websocket_onOpen(http_context *ctx)
  */
 void swoole_websocket_onReuqest(http_context *ctx)
 {
+    SWOOLE_GET_TSRMLS;
     char *content = "<html><body><h2>HTTP ERROR 400</h2><hr><i>Powered by "SW_HTTP_SERVER_SOFTWARE" ("PHP_SWOOLE_VERSION")</i></body></html>";
     char *bad_request = "HTTP/1.1 400 Bad Request\r\n"\
             "Content-Type: text/html; charset=UTF-8\r\n"\
@@ -139,7 +140,9 @@ void swoole_websocket_onReuqest(http_context *ctx)
 
     int n = sprintf(buf, bad_request, strlen(content), content);
     swServer_tcp_send(SwooleG.serv, ctx->fd, buf, n);
+    ctx->end = 1;
     SwooleG.serv->factory.end(&SwooleG.serv->factory, ctx->fd);
+    swoole_http_context_free(ctx TSRMLS_CC);
 }
 
 void php_swoole_sha1(const char *str, int _len, unsigned char *digest)
@@ -150,7 +153,7 @@ void php_swoole_sha1(const char *str, int _len, unsigned char *digest)
     PHP_SHA1Final(digest, &context);
 }
 
-static int websocket_handshake(http_context *ctx)
+static int websocket_handshake(swListenPort *port, http_context *ctx)
 {
 #if PHP_MAJOR_VERSION < 7
     TSRMLS_FETCH_FROM_CTX(sw_thread_ctx ? sw_thread_ctx : NULL);
@@ -188,6 +191,12 @@ static int websocket_handshake(http_context *ctx)
 
     swString_append_ptr(swoole_http_buffer, _buf, n);
     swString_append_ptr(swoole_http_buffer, ZEND_STRL("Sec-WebSocket-Version: "SW_WEBSOCKET_VERSION"\r\n"));
+    if (port->websocket_subprotocol)
+    {
+        swString_append_ptr(swoole_http_buffer, ZEND_STRL("Sec-WebSocket-Protocol: "));
+        swString_append_ptr(swoole_http_buffer, port->websocket_subprotocol, port->websocket_subprotocol_length);
+        swString_append_ptr(swoole_http_buffer, ZEND_STRL("\r\n"));
+    }
     swString_append_ptr(swoole_http_buffer, ZEND_STRL("Server: "SW_WEBSOCKET_SERVER_SOFTWARE"\r\n\r\n"));
 
     swTrace("websocket header len:%ld\n%s \n", swoole_http_buffer->length, swoole_http_buffer->str);
@@ -247,14 +256,14 @@ int swoole_websocket_onMessage(swEventData *req)
     return SW_OK;
 }
 
-int swoole_websocket_onHandshake(http_context *ctx)
+int swoole_websocket_onHandshake(swListenPort *port, http_context *ctx)
 {
 #if PHP_MAJOR_VERSION < 7
     TSRMLS_FETCH_FROM_CTX(sw_thread_ctx ? sw_thread_ctx : NULL);
 #endif
 
     int fd = ctx->fd;
-    int ret = websocket_handshake(ctx);
+    int ret = websocket_handshake(port, ctx);
     if (ret == SW_ERR)
     {
         SwooleG.serv->factory.end(&SwooleG.serv->factory, fd);
@@ -285,6 +294,7 @@ void swoole_websocket_init(int module_number TSRMLS_DC)
 
     REGISTER_LONG_CONSTANT("WEBSOCKET_OPCODE_TEXT", WEBSOCKET_OPCODE_TEXT_FRAME, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WEBSOCKET_OPCODE_BINARY", WEBSOCKET_OPCODE_BINARY_FRAME, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("WEBSOCKET_OPCODE_PING", WEBSOCKET_OPCODE_PING, CONST_CS | CONST_PERSISTENT);
 
     REGISTER_LONG_CONSTANT("WEBSOCKET_STATUS_CONNECTION", WEBSOCKET_STATUS_CONNECTION, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("WEBSOCKET_STATUS_HANDSHAKE", WEBSOCKET_STATUS_HANDSHAKE, CONST_CS | CONST_PERSISTENT);

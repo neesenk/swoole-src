@@ -65,18 +65,8 @@ int swManager_start(swFactory *factory)
 
     if (SwooleG.task_worker_num > 0)
     {
-        key_t key = 0;
-        int create_pipe = 1;
-
-        if (SwooleG.task_ipc_mode > SW_TASK_IPC_UNIXSOCK)
+        if (swServer_create_task_worker(serv) < 0)
         {
-            key = serv->message_queue_key;
-            create_pipe = 0;
-        }
-
-        if (swProcessPool_create(&SwooleGS->task_workers, SwooleG.task_worker_num, SwooleG.task_max_request, key, create_pipe) < 0)
-        {
-            swWarn("[Master] create task_workers failed.");
             return SW_ERR;
         }
 
@@ -210,7 +200,7 @@ static void swManager_check_exit_status(swServer *serv, int worker_id, pid_t pid
 
 static int swManager_loop_async(swFactory *factory)
 {
-    int pid, new_pid;
+    pid_t pid, new_pid;
     int i;
     int reload_worker_num;
     int ret;
@@ -310,7 +300,7 @@ static int swManager_loop_async(swFactory *factory)
                     swManager_check_exit_status(serv, i, pid, status);
 
                     //pid ->new pid
-                    new_pid = (pid_t) swHashMap_find_int(pidMap, pid);
+                    new_pid = (pid_t) (long) swHashMap_find_int(pidMap, pid);
                     swWarn(" now the worker pid is %d", new_pid);
                     serv->workers[i].pid = new_pid;
                 }
@@ -360,7 +350,7 @@ static int swManager_loop_async(swFactory *factory)
                     }
                     else
                     {
-                        swHashMap_add_int(pidMap, reload_workers[i].pid, (void*) new_pid);
+                        swHashMap_add_int(pidMap, reload_workers[i].pid, (void*) (long) new_pid);
                         swWarn(" add pidMap new_pid is %d old pid is %d", new_pid, reload_workers[i].pid);
                         break;
                     }
@@ -477,6 +467,9 @@ static int swManager_loop_sync(swFactory *factory)
     swSignal_add(SIGTERM, swManager_signal_handle);
     swSignal_add(SIGUSR1, swManager_signal_handle);
     swSignal_add(SIGUSR2, swManager_signal_handle);
+#ifdef SIGRTMIN
+    swSignal_add(SIGRTMIN, swManager_signal_handle);
+#endif
     //swSignal_add(SIGINT, swManager_signal_handle);
 
     SwooleG.main_reactor = NULL;
@@ -621,35 +614,7 @@ static int swManager_loop_sync(swFactory *factory)
     //kill all user process
     if (serv->user_worker_map)
     {
-        swWorker* user_worker;
-        uint64_t key;
-
-        //kill user process
-        while (1)
-        {
-            user_worker = swHashMap_each_int(serv->user_worker_map, &key);
-            //hashmap empty
-            if (user_worker == NULL)
-            {
-                break;
-            }
-            kill(user_worker->pid, SIGTERM);
-        }
-
-        //wait user process
-        while (1)
-        {
-            user_worker = swHashMap_each_int(serv->user_worker_map, &key);
-            //hashmap empty
-            if (user_worker == NULL)
-            {
-                break;
-            }
-            if (swWaitpid(user_worker->pid, &status, 0) < 0)
-            {
-                swSysError("waitpid(%d) failed.", serv->workers[i].pid);
-            }
-        }
+        swManager_kill_user_worker(serv);
     }
 
     if (serv->onManagerStop)
@@ -714,6 +679,12 @@ static void swManager_signal_handle(int sig)
         }
         break;
     default:
+#ifdef SIGRTMIN
+        if (sig == SIGRTMIN)
+        {
+            swServer_reopen_log_file(SwooleG.serv);
+        }
+#endif
         break;
     }
 }
@@ -732,6 +703,40 @@ int swManager_wait_user_worker(swProcessPool *pool, pid_t pid)
     }
 }
 
+void swManager_kill_user_worker(swServer *serv)
+{
+    swWorker* user_worker;
+    uint64_t key;
+    int __stat_loc;
+
+    //kill user process
+    while (1)
+    {
+        user_worker = swHashMap_each_int(serv->user_worker_map, &key);
+        //hashmap empty
+        if (user_worker == NULL)
+        {
+            break;
+        }
+        kill(user_worker->pid, SIGTERM);
+    }
+
+    //wait user process
+    while (1)
+    {
+        user_worker = swHashMap_each_int(serv->user_worker_map, &key);
+        //hashmap empty
+        if (user_worker == NULL)
+        {
+            break;
+        }
+        if (swWaitpid(user_worker->pid, &__stat_loc, 0) < 0)
+        {
+            swSysError("waitpid(%d) failed.", user_worker->pid);
+        }
+    }
+}
+
 pid_t swManager_spawn_user_worker(swServer *serv, swWorker* worker)
 {
     pid_t pid = fork();
@@ -744,6 +749,15 @@ pid_t swManager_spawn_user_worker(swServer *serv, swWorker* worker)
     //child
     else if (pid == 0)
     {
+        SwooleG.process_type = SW_PROCESS_USERWORKER;
+        SwooleWG.worker = worker;
+        SwooleWG.id = worker->id;
+        worker->pid = getpid();
+        //close tcp listen socket
+        if (serv->factory_mode == SW_MODE_SINGLE)
+        {
+            swServer_close_port(serv, SW_TRUE);
+        }
         serv->onUserWorkerStart(serv, worker);
         exit(0);
     }
